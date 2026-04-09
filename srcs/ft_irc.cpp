@@ -6,7 +6,7 @@
 /*   By: jidrizi <jidrizi@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/09 15:53:55 by jidrizi           #+#    #+#             */
-/*   Updated: 2026/04/09 16:03:52 by jidrizi          ###   ########.fr       */
+/*   Updated: 2026/04/09 16:22:46 by jidrizi          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -42,16 +42,16 @@ int ft_irc::parseArgs(char** argv)
 {
 	int	_port = std::atoi(argv[1]);
 	if (_port < 1024 || _port > 65535)
-		return (print_error("Invalid port"));
+		return (printError("invalid port"));
 	this->port = _port;
 	
 	std::string	_password = argv[2];
 	size_t		spacePos;
 	if (_password.empty())
-		return (print_error("Password cannot be empty"));
+		return (printError("password cannot be empty"));
 	spacePos = _password.find(' ');
 	if (spacePos != std::string::npos)
-		return (print_error("Password cannot have spaces"));
+		return (printError("password cannot have spaces"));
 	this->password = _password;
 
 	return (0);

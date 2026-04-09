@@ -1,3 +1,6 @@
+# Non git ignore template stuff
+ircserv
+
 # Prerequisites
 *.d
 

@@ -6,7 +6,7 @@
 /*   By: jidrizi <jidrizi@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/09 15:54:09 by jidrizi           #+#    #+#             */
-/*   Updated: 2026/04/09 16:01:52 by jidrizi          ###   ########.fr       */
+/*   Updated: 2026/04/09 16:20:34 by jidrizi          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -34,7 +34,7 @@ class	ft_irc
 };
 
 
-int	print_error(std::string	error_msg);
+int	printError(std::string	error_msg);
 
 
 #endif
