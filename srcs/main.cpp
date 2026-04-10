@@ -22,13 +22,13 @@ int	printError(std::string	error_msg)
 
 int main(int argc, char** argv)
 {
-	ft_irc	x;
+	Server	serv;
 
 	if (argc != 3)
 		return (printError("usage needs to be ./ircserv <port> <password>"));
-	
-	if (x.parseArgs(argv))
+	if (serv.parseArgs(argv))
 		return (1);
 	
+	std::cout << "Done!" << std::endl;
 	return (0);
 }

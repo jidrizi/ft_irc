@@ -8,7 +8,7 @@ all: $(NAME)
 
 SRCDIR = srcs/
 
-SRCS = $(SRCDIR)main.cpp $(SRCDIR)ft_irc.cpp
+SRCS = $(SRCDIR)main.cpp $(SRCDIR)Server.cpp
 
 BIN_DIR = bin
 
