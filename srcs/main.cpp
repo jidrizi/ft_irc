@@ -12,6 +12,15 @@
 
 #include "ft_irc.hpp"
 
+bool Server::signal = false; //initialize the static boolean
+
+void Server::signalHandler(int signum)
+{
+	(void)signum;
+	std::cout << std::endl << "Signal Recieved!" << std::endl;
+	Server::signal = true;
+}
+
 int	printError(std::string	error_msg)
 {
 	std::cerr << "Error: " << error_msg << std::endl;
@@ -30,5 +39,14 @@ int main(int argc, char** argv)
 		return (1);
 	
 	std::cout << "Done!" << std::endl;
+	std::cout << "--SERVER STARTING--" << std::endl;
+	try{
+		signal(SIGINT, Server::signalHandler);
+		signal(SIGQUIT, Server::signalHandler);
+	}
+	catch(const std::exception& e){
+		std::cerr << e.what() << std::endl;
+	}
+	std::cout << "Server closed!"<< std::endl;
 	return (0);
 }
