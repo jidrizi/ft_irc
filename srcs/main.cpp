@@ -27,7 +27,17 @@ int	printError(std::string	error_msg)
 	return (1);
 }
 
+void Server::servInit()
+{
+	// fixed port for now, will fix it later with dynamic port
+	this->port = 4444;
 
+	std::cout << "Port: " << port << std::endl;
+	//start the socket somehow
+	// servSocket();
+	std::cout << GRE << "Server <" << servSocketfd << "> Connected" << WHI << std::endl;
+	std::cout <<"Waiting to connect to Server..." << std::endl;
+}
 
 int main(int argc, char** argv)
 {
@@ -43,9 +53,12 @@ int main(int argc, char** argv)
 	try{
 		signal(SIGINT, Server::signalHandler);
 		signal(SIGQUIT, Server::signalHandler);
+		//SERVER INIT
+		serv.servInit();
 	}
 	catch(const std::exception& e){
 		std::cerr << e.what() << std::endl;
+		//close fd's if error
 	}
 	std::cout << "Server closed!"<< std::endl;
 	return (0);
