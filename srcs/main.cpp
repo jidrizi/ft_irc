@@ -6,7 +6,7 @@
 /*   By: jidrizi <jidrizi@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/09 15:54:01 by jidrizi           #+#    #+#             */
-/*   Updated: 2026/04/15 19:18:58 by jidrizi          ###   ########.fr       */
+/*   Updated: 2026/04/15 19:24:13 by jidrizi          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -83,6 +83,24 @@ void Server::servInit()
 	servSocket();
 	std::cout << GRE << "Server <" << servSocketfd << "> Connected" << WHI << std::endl;
 	std::cout <<"Waiting to connect to Server..." << std::endl;
+
+	while(Server::Signal == false)
+	{
+		if (poll(&fds[0], fds.size(), -1) == -1 && Server::Signal == false)
+			throw(std::runtime_error("poll() failed"));
+	
+		for (size_t i = 0; i < fds.size(); i++)
+		{
+			if (fds[i].revents & POLLIN)
+			{
+				if (fds[i].fd == servSocketfd)
+					AcceptNewClient();
+				else
+					RecieveNewData(fds[i].fd);
+			}
+		}
+	}
+	closeFds();
 }
 
 int main(int argc, char** argv)
