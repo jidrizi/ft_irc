@@ -6,7 +6,7 @@
 /*   By: fefo <fefo@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/09 15:54:01 by jidrizi           #+#    #+#             */
-/*   Updated: 2026/05/05 17:03:20 by fefo             ###   ########.fr       */
+/*   Updated: 2026/05/05 20:08:57 by fefo             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -32,8 +32,8 @@ void Server::closeFds()
 	//looping through all the clients and closing all of them
 	for (size_t i = 0; i < clients.size(); i++)
 	{
-		std::cout << RED << "Client <" << clients[i].getFd() << "> Disconnected" << WHI << std::endl;
-		close(clients[i].getFd());
+		std::cout << RED << "Client <" << clients[i]->getFd() << "> Disconnected" << WHI << std::endl;
+		close(clients[i]->getFd());
 	}
 	//closing the server socket
 	if (servSocketfd != -1)
@@ -71,12 +71,11 @@ void Server::servSocket()
 	NewPoll.events = POLLIN;
 	NewPoll.revents = 0;
 	fds.push_back(NewPoll);
+	this->Host = "localhost"; 
 }
 
 void Server::servInit()
 {
-	// fixed port for now, will fix it later with dynamic port
-	this->port = 4444;
 
 	std::cout << "Port: " << port << std::endl;
 	//start the socket somehow
@@ -98,6 +97,11 @@ void Server::servInit()
 				else
 					recieveNewData(fds[i].fd);
 			}
+
+			if (fds[i].revents & POLLOUT)
+			{
+				sendPending(fds[i].fd);
+			}
 		}
 	}
 	closeFds();
@@ -105,7 +109,7 @@ void Server::servInit()
 
 void Server::acceptNewClient()
 {
-	Client cli; //-> create a new client
+	Client* cli = new Client();
 	struct sockaddr_in cliadd;
 	struct pollfd NewPoll;
 	socklen_t len = sizeof(cliadd);
@@ -121,13 +125,15 @@ void Server::acceptNewClient()
 	NewPoll.events = POLLIN; //-> set the event to POLLIN for reading data
 	NewPoll.revents = 0; //-> set the revents to 0
 
-	cli.setFd(incofd); //-> set the client file descriptor
-	cli.setIpAddr(inet_ntoa((cliadd.sin_addr))); //-> convert the ip address to string and set it
+	cli->setFd(incofd); //-> set the client file descriptor
+	cli->setIpAddr(inet_ntoa((cliadd.sin_addr))); //-> convert the ip address to string and set it
 	clients.push_back(cli); //-> add the client to the vector of clients
 	fds.push_back(NewPoll); //-> add the client socket to the pollfd
 
 	std::cout << GRE << "Client <" << incofd << "> Connected" << WHI << std::endl;
 }
+
+
 
 int main(int argc, char** argv)
 {
