@@ -6,7 +6,7 @@
 /*   By: jidrizi <jidrizi@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/09 15:54:01 by jidrizi           #+#    #+#             */
-/*   Updated: 2026/04/15 19:24:13 by jidrizi          ###   ########.fr       */
+/*   Updated: 2026/04/28 18:36:51 by fefo             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -101,6 +101,32 @@ void Server::servInit()
 		}
 	}
 	closeFds();
+}
+
+void Server::acceptNewClient()
+{
+	Client cli; //-> create a new client
+	struct sockaddr_in cliadd;
+	struct pollfd NewPoll;
+	socklen_t len = sizeof(cliadd);
+
+	int incofd = accept(servSocketfd, (sockaddr *)&(cliadd), &len); //-> accept the new client
+	if (incofd == -1)
+		{std::cout << "accept() failed" << std::endl; return;}
+
+	if (fcntl(incofd, F_SETFL, O_NONBLOCK) == -1) //-> set the socket option (O_NONBLOCK) for non-blocking socket
+		{std::cout << "fcntl() failed" << std::endl; return;}
+
+	NewPoll.fd = incofd; //-> add the client socket to the pollfd
+	NewPoll.events = POLLIN; //-> set the event to POLLIN for reading data
+	NewPoll.revents = 0; //-> set the revents to 0
+
+	cli.setFd(incofd); //-> set the client file descriptor
+	cli.setIpAddr(inet_ntoa((cliadd.sin_addr))); //-> convert the ip address to string and set it
+	clients.push_back(cli); //-> add the client to the vector of clients
+	fds.push_back(NewPoll); //-> add the client socket to the pollfd
+
+	std::cout << GRE << "Client <" << incofd << "> Connected" << WHI << std::endl;
 }
 
 int main(int argc, char** argv)
