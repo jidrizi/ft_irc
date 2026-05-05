@@ -1,12 +1,12 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   ft_irc.cpp                                         :+:      :+:    :+:   */
+/*   Server.cpp                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: jidrizi <jidrizi@student.42.fr>            +#+  +:+       +#+        */
+/*   By: fefo <fefo@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/09 15:53:55 by jidrizi           #+#    #+#             */
-/*   Updated: 2026/04/09 16:22:46 by jidrizi          ###   ########.fr       */
+/*   Updated: 2026/05/05 17:07:26 by fefo             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -50,5 +50,25 @@ void	Server::ClearClients(int _fd)
 			clients.erase(clients.begin() + i);
 			break ;
 		}
+	}
+}
+
+void Server::recieveNewData(int _fd)
+{
+	char buff[1024]; //-> buffer for the received data
+	memset(buff, 0, sizeof(buff)); //-> clear the buffer
+
+	ssize_t bytes = recv(_fd, buff, sizeof(buff) - 1 , 0); //-> receive the data
+
+	if(bytes <= 0){ //-> check if the client disconnected
+		std::cout << RED << "Client <" << _fd << "> Disconnected" << WHI << std::endl;
+		ClearClients(_fd); //-> clear the client
+		close(_fd); //-> close the client socket
+	}
+
+	else{ //-> print the received data
+		buff[bytes] = '\0';
+		std::cout << YEL << "Client <" << _fd << "> Data: " << WHI << buff;
+		//here you can add your code to process the received data: parse, check, authenticate, handle the command, etc...
 	}
 }
