@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   main.cpp                                           :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: jidrizi <jidrizi@student.42.fr>            +#+  +:+       +#+        */
+/*   By: fefo <fefo@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/09 15:54:01 by jidrizi           #+#    #+#             */
-/*   Updated: 2026/04/28 18:36:51 by fefo             ###   ########.fr       */
+/*   Updated: 2026/05/05 17:03:20 by fefo             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -84,9 +84,9 @@ void Server::servInit()
 	std::cout << GRE << "Server <" << servSocketfd << "> Connected" << WHI << std::endl;
 	std::cout <<"Waiting to connect to Server..." << std::endl;
 
-	while(Server::Signal == false)
+	while(Server::signal == false)
 	{
-		if (poll(&fds[0], fds.size(), -1) == -1 && Server::Signal == false)
+		if (poll(&fds[0], fds.size(), -1) == -1 && Server::signal == false)
 			throw(std::runtime_error("poll() failed"));
 	
 		for (size_t i = 0; i < fds.size(); i++)
@@ -94,9 +94,9 @@ void Server::servInit()
 			if (fds[i].revents & POLLIN)
 			{
 				if (fds[i].fd == servSocketfd)
-					AcceptNewClient();
+					acceptNewClient();
 				else
-					RecieveNewData(fds[i].fd);
+					recieveNewData(fds[i].fd);
 			}
 		}
 	}

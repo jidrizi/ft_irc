@@ -1,3 +1,6 @@
+#subject sheet
+*.txt
+
 # Non git ignore template stuff
 ircserv
 
