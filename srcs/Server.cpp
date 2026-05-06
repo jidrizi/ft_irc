@@ -249,8 +249,60 @@ void	Server::processClientLine(ClientSession& client, const std::string& line)
 		handleTopic(client, command);
 		return ;
 	}
+	if (command.type == CMD_WHOIS)
+	{
+		handleWhois(client, command);
+		return ;
+	}
 	handlePreCommandChecks(client, command);
 }
+
+bool matchSimple(const std::string& mask, const std::string& nick)
+{
+    // no wildcard → exact match
+    if (mask.find('*') == std::string::npos)
+        return mask == nick;
+
+    // wildcard at end: "john*"
+    if (mask[mask.size() - 1] == '*')
+    {
+        std::string prefix = mask.substr(0, mask.size() - 1);
+        return nick.compare(0, prefix.size(), prefix) == 0;
+    }
+
+    return false;
+}
+
+
+int Server::handleWhois(ClientSession& client, Command& command)
+{
+	std::string masks = command.paramList[0];
+	std::vector<std::string> maskList = splitByComma(masks);
+	if (masks.empty())
+		return (client.sendBuffer() += ERR_NEEDMOREPARAMS(host, command.commandName), -1);
+	for (size_t i = 0; i < maskList.size(); i++)
+	{
+		const std::string& mask = maskList[i];
+
+		for (size_t j = 0; j < clients.size(); j++)
+		{
+			const std::string& nick = clients[j]->user().nickname;
+
+			if (matchSimple(mask, nick))
+			{
+				const ClientSession* user = this->findClientByNick(nick); 
+				if (!user)
+					return (client.sendBuffer() =+ ERR_NOSUCHNICK(host, client.user().nickname, nick), -1);
+				client.sendBuffer() += RPL_WHOISUSER(host, user->user().nickname, user->user().username, user->user().hostname,  user->user().realname);
+				client.sendBuffer() += RPL_ENDOFWHOIS(host, client.user().nickname);
+				return 0;
+			}
+			return (client.sendBuffer() =+ ERR_NOSUCHNICK(host, client.user().nickname, nick), -1);
+		}
+	}
+	return 0;
+}
+
 
 int Server::handleTopic(ClientSession& client, Command& command)
 {

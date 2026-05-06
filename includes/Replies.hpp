@@ -78,4 +78,8 @@
 	":" + host + " 332 " + nick + " " + chan + " :" + topic + "\r\n"
 #define RPL_NOTOPIC(src,nick, chan) \
 	":" + src + " 331 " + nick + " " + chan + " :No topic is set\r\n"
+#define RPL_WHOISUSER(src, nick, username, host, rname) \
+	":" + src + " 311 " + nick + " " + username + " " + host + " * :" + rname + "\r\n"
+#define RPL_ENDOFWHOIS(src, nick) \
+	":" + src + " 318 " + nick + " :End of WHOIS list\r\n" 
 #endif
