@@ -244,7 +244,54 @@ void	Server::processClientLine(ClientSession& client, const std::string& line)
 			client.sendBuffer() += ":" + host + " PONG :" + host + "\r\n";
 		return;
 	}
+	if (command.type == CMD_TOPIC)
+	{
+		handleTopic(client, command);
+		return ;
+	}
 	handlePreCommandChecks(client, command);
+}
+
+int Server::handleTopic(ClientSession& client, Command& command)
+{
+	if (client.user().registrationState < 4)
+		return (client.sendBuffer() += ERR_NOTREGISTERED(host), -1);
+	if (command.paramList.size() < 1)
+		return (client.sendBuffer() += ERR_NEEDMOREPARAMS(host, "TOPIC"), -1);
+	
+	const std::string channelName = command.paramList[0];
+	std::string name = "";
+	int i = 1;
+	while (i < command.paramList.size())
+	{
+		name += command.paramList[i];
+		name += " ";
+		i++;
+	}
+	std::map<std::string, Channel*>::iterator chIt = channels.find(channelName);
+	if (chIt == channels.end())
+		return (client.sendBuffer() += ERR_NOSUCHCHANNEL(host, channelName), -1);
+	Channel& channel = *chIt->second;
+	if (!channel.hasMember(client.fd()))
+		return (client.sendBuffer() += ERR_NOTONCHANNEL(host, channelName), -1);
+	if (name.empty())
+	{
+		if (!channel.getTopic().empty())
+		{
+			client.sendBuffer() += RPL_TOPIC(host, client.user().nickname, channel.getName(), channel.getTopic());
+			return 0;
+		}	
+		else
+		{
+			std::cout << "helpo"<< std::endl;
+			client.sendBuffer() += RPL_NOTOPIC(host, client.user().nickname, channel.getName());
+			return 0;
+		}	
+	}
+	channel.setTopic(name);
+	client.sendBuffer() += RPL_TOPIC(host, client.user().nickname, channel.getName(), name);
+	return 0;
+
 }
 
 int	Server::handlePreCommandChecks(ClientSession& client, Command& command)

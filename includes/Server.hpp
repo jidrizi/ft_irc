@@ -60,6 +60,7 @@ class Server
 		int		handlePrivmsg(ClientSession& client, Command& command);
 		int		handleInvite(ClientSession& client, Command& command);
 		int		handleKick(ClientSession& client, Command& command);
+		int		handleTopic(ClientSession& client, Command& command);
 		void	tryCompleteRegistration(ClientSession& client);
 		bool	isNicknameInUse(const std::string& nickname, int excludingFd) const;
 		bool	isValidNickname(const std::string& nickname) const;

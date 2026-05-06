@@ -74,5 +74,8 @@
 	":" + src + " INVITE " + target + " :" + channel + "\r\n"
 # define RPL_KICK(src, channel, reason, user) \
 	":" + src + " KICK " + channel + " " + user + " :" + reason + "\r\n"
-
+#define RPL_TOPIC(host, nick, chan, topic) \
+	":" + host + " 332 " + nick + " " + chan + " :" + topic + "\r\n"
+#define RPL_NOTOPIC(src,nick, chan) \
+	":" + src + " 331 " + nick + " " + chan + " :No topic is set\r\n"
 #endif
