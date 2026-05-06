@@ -1,5 +1,6 @@
 #include "Command.hpp"
 
+#include <algorithm>
 #include <cctype>
 
 CommandType	getCommandType(const std::string& command)
@@ -50,6 +51,11 @@ std::vector<std::string> splitParams(const std::string& paramsText)
 			++index;
 		if (index >= normalized.size())
 			break;
+		if (normalized[index] == ':')
+		{
+			paramList.push_back(normalized.substr(index + 1));
+			break;
+		}
 		std::size_t tokenStart = index;
 		while (index < normalized.size() && !std::isspace(normalized[index]))
 			++index;
@@ -78,6 +84,8 @@ Command	parseCommand(const std::string& line)
 		command.commandName = normalized.substr(0, separator);
 		command.paramsText = trimSpaces(normalized.substr(separator + 1));
 	}
+	std::transform(command.commandName.begin(), command.commandName.end(),
+		command.commandName.begin(), ::toupper);
 
 	command.type = getCommandType(command.commandName);
 	command.paramList = splitParams(command.paramsText);

@@ -1,6 +1,8 @@
 #include "Server.hpp"
 #include "Replies.hpp"
 
+#include <algorithm>
+
 bool Server::stopSignal = false;
 
 Server::Server()
@@ -13,8 +15,11 @@ Server::~Server()
 	closeAllFds();
 	for (std::vector<ClientSession*>::iterator it = clients.begin(); it != clients.end(); ++it)
 		delete *it;
+	for (std::map<std::string, Channel*>::iterator it = channels.begin(); it != channels.end(); ++it)
+		delete it->second;
 	clients.clear();
 	pollFds.clear();
+	channels.clear();
 }
 
 int	printError(const std::string& errorMessage)
@@ -206,6 +211,31 @@ void	Server::processClientLine(ClientSession& client, const std::string& line)
 		tryCompleteRegistration(client);
 		return;
 	}
+	if (command.type == CMD_JOIN)
+	{
+		handleJoin(client, command);
+		return;
+	}
+	if (command.type == CMD_PART)
+	{
+		handlePart(client, command);
+		return;
+	}
+	if (command.type == CMD_PRIVMSG)
+	{
+		handlePrivmsg(client, command);
+		return;
+	}
+	if (command.type == CMD_INVITE)
+	{
+		handleInvite(client, command);
+		return;
+	}
+	if (command.type == CMD_KICK)
+	{
+		handleKick(client, command);
+		return;
+	}
 	if (command.type == CMD_PING)
 	{
 		if (!command.paramsText.empty())
@@ -215,7 +245,6 @@ void	Server::processClientLine(ClientSession& client, const std::string& line)
 		return;
 	}
 	handlePreCommandChecks(client, command);
-	(void)line;
 }
 
 int	Server::handlePreCommandChecks(ClientSession& client, Command& command)
@@ -388,6 +417,329 @@ void	Server::tryCompleteRegistration(ClientSession& client)
 		client.user().nickname);
 }
 
+bool	Server::isValidChannelName(const std::string& channelName) const
+{
+	if (channelName.empty())
+		return false;
+	if (channelName[0] != '#')
+		return false;
+	for (std::size_t i = 0; i < channelName.size(); ++i)
+	{
+		if (channelName[i] == ' ' || channelName[i] == ',' || channelName[i] == '\a')
+			return false;
+	}
+	return true;
+}
+
+ClientSession*	Server::findClientByNick(const std::string& nickname)
+{
+	for (std::vector<ClientSession*>::iterator it = clients.begin(); it != clients.end(); ++it)
+	{
+		if ((*it)->user().nickname == nickname)
+			return *it;
+	}
+	return NULL;
+}
+
+std::vector<std::string> Server::splitByComma(const std::string& text) const
+{
+	std::vector<std::string> values;
+	std::string token;
+	for (std::size_t i = 0; i < text.size(); ++i)
+	{
+		if (text[i] == ',')
+		{
+			if (!token.empty())
+				values.push_back(token);
+			token.clear();
+			continue;
+		}
+		token += text[i];
+	}
+	if (!token.empty())
+		values.push_back(token);
+	return values;
+}
+
+void	Server::sendToClient(int fd, const std::string& message)
+{
+	ClientSession* client = findClientByFd(fd);
+	if (!client)
+		return;
+	client->sendBuffer() += message;
+}
+
+void	Server::broadcastToChannel(const Channel& channel, const std::string& message, int exceptFd)
+{
+	const std::set<int>& members = channel.getMembers();
+	for (std::set<int>::const_iterator it = members.begin(); it != members.end(); ++it)
+	{
+		if (*it == exceptFd)
+			continue;
+		sendToClient(*it, message);
+	}
+}
+
+std::string	Server::buildNamesList(const Channel& channel) const
+{
+	std::string list;
+	const std::set<int>& members = channel.getMembers();
+	for (std::set<int>::const_iterator it = members.begin(); it != members.end(); ++it)
+	{
+		ClientSession* member = NULL;
+		for (std::vector<ClientSession*>::const_iterator ci = clients.begin(); ci != clients.end(); ++ci)
+		{
+			if ((*ci)->fd() == *it)
+			{
+				member = *ci;
+				break;
+			}
+		}
+		if (!member)
+			continue;
+		if (!list.empty())
+			list += " ";
+		if (channel.hasOperator(*it))
+			list += "@";
+		list += member->user().nickname;
+	}
+	return list;
+}
+
+int	Server::handleJoin(ClientSession& client, Command& command)
+{
+	if (client.user().registrationState < 4)
+		return (client.sendBuffer() += ERR_NOTREGISTERED(host), -1);
+	if (command.paramList.empty())
+		return (client.sendBuffer() += ERR_NEEDMOREPARAMS(host, "JOIN"), -1);
+
+	std::vector<std::string> targets = splitByComma(command.paramList[0]);
+	for (std::vector<std::string>::iterator it = targets.begin(); it != targets.end(); ++it)
+	{
+		if (!isValidChannelName(*it))
+		{
+			client.sendBuffer() += ERR_BADCHANMASK(*it);
+			continue;
+		}
+		Channel* channel = NULL;
+		std::map<std::string, Channel*>::iterator chIt = channels.find(*it);
+		if (chIt == channels.end())
+		{
+			channel = new Channel(*it);
+			channels[*it] = channel;
+			if (command.paramList.size() > 1)
+			{
+				std::vector<std::string> keys = splitByComma(command.paramList[1]);
+				if (!keys.empty())
+					channel->setKey(keys[0]);
+			}
+		}
+		else
+			channel = chIt->second;
+
+		if (channel->hasMember(client.fd()))
+			continue;
+
+		if (channel->isInviteOnly() && !channel->isInvited(client.fd()))
+		{
+			client.sendBuffer() += ERR_INVITEONLYCHAN(host, channel->getName());
+			continue;
+		}
+		if (channel->isFull())
+		{
+			client.sendBuffer() += ERR_CHANNELISFULL(client.user().source(), channel->getName());
+			continue;
+		}
+		if (channel->hasKey())
+		{
+			std::string givenKey;
+			if (command.paramList.size() > 1)
+			{
+				std::vector<std::string> keys = splitByComma(command.paramList[1]);
+				if (!keys.empty())
+					givenKey = keys[0];
+			}
+			if (!channel->keyMatches(givenKey))
+			{
+				client.sendBuffer() += ERR_BADCHANNELKEY(client.user().source(), channel->getName());
+				continue;
+			}
+		}
+
+		channel->addMember(client.fd());
+		channel->removeInvite(client.fd());
+		if (channel->getMembers().size() == 1)
+			channel->addOperator(client.fd());
+
+		const std::string joinMsg = RPL_JOIN(client.user().nickname, client.user().username,
+			client.user().hostname, channel->getName());
+		broadcastToChannel(*channel, joinMsg, -1);
+		client.sendBuffer() += RPL_NAMERPLY(host, client.user().nickname, channel->getName(), buildNamesList(*channel));
+		client.sendBuffer() += RPL_ENDOFNAMES(host, client.user().nickname, channel->getName());
+	}
+	return 0;
+}
+
+int	Server::handlePart(ClientSession& client, Command& command)
+{
+	if (client.user().registrationState < 4)
+		return (client.sendBuffer() += ERR_NOTREGISTERED(host), -1);
+	if (command.paramList.empty())
+		return (client.sendBuffer() += ERR_NEEDMOREPARAMS(host, "PART"), -1);
+
+	std::vector<std::string> targets = splitByComma(command.paramList[0]);
+	std::string reason = "Leaving";
+	if (command.paramList.size() > 1)
+		reason = command.paramList[1];
+
+	for (std::vector<std::string>::iterator it = targets.begin(); it != targets.end(); ++it)
+	{
+		std::map<std::string, Channel*>::iterator chIt = channels.find(*it);
+		if (chIt == channels.end())
+		{
+			client.sendBuffer() += ERR_NOSUCHCHANNEL(host, *it);
+			continue;
+		}
+		Channel& channel = *chIt->second;
+		if (!channel.hasMember(client.fd()))
+		{
+			client.sendBuffer() += ERR_NOTONCHANNEL(host, channel.getName());
+			continue;
+		}
+
+		const std::string partMsg = RPL_PART(client.user().source(), channel.getName(), reason);
+		broadcastToChannel(channel, partMsg, -1);
+		channel.removeMember(client.fd());
+		channel.ensureOperator();
+		if (channel.empty())
+		{
+			delete chIt->second;
+			channels.erase(chIt);
+		}
+	}
+	return 0;
+}
+
+int	Server::handlePrivmsg(ClientSession& client, Command& command)
+{
+	if (client.user().registrationState < 4)
+		return (client.sendBuffer() += ERR_NOTREGISTERED(host), -1);
+	if (command.paramList.empty())
+		return (client.sendBuffer() += ERR_NORECIPIENT(host, "PRIVMSG"), -1);
+	if (command.paramList.size() < 2 || command.paramList[1].empty())
+		return (client.sendBuffer() += ERR_NOTEXTTOSEND(host, client.user().nickname), -1);
+
+	std::vector<std::string> targets = splitByComma(command.paramList[0]);
+	const std::string& text = command.paramList[1];
+	for (std::vector<std::string>::iterator it = targets.begin(); it != targets.end(); ++it)
+	{
+		if ((*it)[0] == '#')
+		{
+			std::map<std::string, Channel*>::iterator chIt = channels.find(*it);
+			if (chIt == channels.end())
+			{
+				client.sendBuffer() += ERR_NOSUCHCHANNEL(host, *it);
+				continue;
+			}
+			Channel& channel = *chIt->second;
+			if (!channel.hasMember(client.fd()))
+			{
+				client.sendBuffer() += ERR_CANNOTSENDTOCHAN(host, channel.getName());
+				continue;
+			}
+			broadcastToChannel(channel, RPL_PRIVMSG(client.user().source(), channel.getName(), text), client.fd());
+		}
+		else
+		{
+			ClientSession* target = findClientByNick(*it);
+			if (!target)
+			{
+				client.sendBuffer() += ERR_NOSUCHNICK(host, client.user().nickname, *it);
+				continue;
+			}
+			target->sendBuffer() += RPL_PRIVMSG(client.user().source(), target->user().nickname, text);
+		}
+	}
+	return 0;
+}
+
+int	Server::handleInvite(ClientSession& client, Command& command)
+{
+	if (client.user().registrationState < 4)
+		return (client.sendBuffer() += ERR_NOTREGISTERED(host), -1);
+	if (command.paramList.size() < 2)
+		return (client.sendBuffer() += ERR_NEEDMOREPARAMS(host, "INVITE"), -1);
+
+	const std::string targetNick = command.paramList[0];
+	const std::string channelName = command.paramList[1];
+
+	std::map<std::string, Channel*>::iterator chIt = channels.find(channelName);
+	if (chIt == channels.end())
+		return (client.sendBuffer() += ERR_NOSUCHCHANNEL(host, channelName), -1);
+	Channel& channel = *chIt->second;
+	if (!channel.hasMember(client.fd()))
+		return (client.sendBuffer() += ERR_NOTONCHANNEL(host, channelName), -1);
+	if (channel.isInviteOnly() && !channel.hasOperator(client.fd()))
+		return (client.sendBuffer() += ERR_CHANOPRIVSNEEDED(host, channelName), -1);
+
+	ClientSession* target = findClientByNick(targetNick);
+	if (!target)
+		return (client.sendBuffer() += ERR_NOSUCHNICK(host, client.user().nickname, targetNick), -1);
+	if (channel.hasMember(target->fd()))
+		return (client.sendBuffer() += ERR_USERONCHANNEL(host, client.user().nickname, targetNick, channelName), -1);
+
+	channel.addInvite(target->fd());
+	client.sendBuffer() += RPL_INVITING(host, client.user().nickname, targetNick, channelName);
+	target->sendBuffer() += RPL_INVITE(client.user().source(), targetNick, channelName);
+	return 0;
+}
+
+int	Server::handleKick(ClientSession& client, Command& command)
+{
+	if (client.user().registrationState < 4)
+		return (client.sendBuffer() += ERR_NOTREGISTERED(host), -1);
+	if (command.paramList.size() < 2)
+		return (client.sendBuffer() += ERR_NEEDMOREPARAMS(host, "KICK"), -1);
+
+	const std::string channelName = command.paramList[0];
+	const std::string reason = command.paramList.size() > 2 ? command.paramList[2] : client.user().nickname;
+	std::map<std::string, Channel*>::iterator chIt = channels.find(channelName);
+	if (chIt == channels.end())
+		return (client.sendBuffer() += ERR_NOSUCHCHANNEL(host, channelName), -1);
+	Channel& channel = *chIt->second;
+	if (!channel.hasMember(client.fd()))
+		return (client.sendBuffer() += ERR_NOTONCHANNEL(host, channelName), -1);
+	if (!channel.hasOperator(client.fd()))
+		return (client.sendBuffer() += ERR_CHANOPRIVSNEEDED(host, channelName), -1);
+
+	std::vector<std::string> targets = splitByComma(command.paramList[1]);
+	for (std::vector<std::string>::iterator it = targets.begin(); it != targets.end(); ++it)
+	{
+		ClientSession* target = findClientByNick(*it);
+		if (!target)
+		{
+			client.sendBuffer() += ERR_NOSUCHNICK(host, client.user().nickname, *it);
+			continue;
+		}
+		if (!channel.hasMember(target->fd()))
+		{
+			client.sendBuffer() += ERR_USERNOTINCHANNEL(host, *it, channelName);
+			continue;
+		}
+
+		const std::string kickMsg = RPL_KICK(client.user().source(), channelName, reason, *it);
+		broadcastToChannel(channel, kickMsg, -1);
+		channel.removeMember(target->fd());
+	}
+	channel.ensureOperator();
+	if (channel.empty())
+	{
+		delete chIt->second;
+		channels.erase(chIt);
+	}
+	return 0;
+}
+
 void	Server::sendPendingToClient(int clientFd)
 {
 	ClientSession* client = findClientByFd(clientFd);
@@ -414,6 +766,7 @@ void	Server::sendPendingToClient(int clientFd)
 
 void	Server::disconnectClient(int clientFd)
 {
+	removeClientFromAllChannels(clientFd);
 	for (std::vector<struct pollfd>::iterator it = pollFds.begin(); it != pollFds.end(); ++it)
 	{
 		if (it->fd == clientFd)
@@ -432,6 +785,23 @@ void	Server::disconnectClient(int clientFd)
 			clients.erase(it);
 			break;
 		}
+	}
+}
+
+void	Server::removeClientFromAllChannels(int clientFd)
+{
+	for (std::map<std::string, Channel*>::iterator it = channels.begin(); it != channels.end(); )
+	{
+		Channel& channel = *it->second;
+		channel.removeMember(clientFd);
+		channel.ensureOperator();
+		if (channel.empty())
+		{
+			delete it->second;
+			channels.erase(it++);
+		}
+		else
+			++it;
 	}
 }
 

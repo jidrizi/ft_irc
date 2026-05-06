@@ -6,6 +6,8 @@
 # include <cstdlib>
 # include <cstring>
 # include <iostream>
+# include <map>
+# include <set>
 # include <stdexcept>
 # include <string>
 # include <vector>
@@ -20,6 +22,7 @@
 # include <unistd.h>
 
 # include "Client.hpp"
+# include "Channel.hpp"
 # include "Command.hpp"
 
 # define RED "\e[1;31m"
@@ -36,6 +39,7 @@ class Server
 		std::string					host;
 		std::vector<ClientSession*>	clients;
 		std::vector<struct pollfd>	pollFds;
+		std::map<std::string, Channel*> channels;
 		static bool					stopSignal;
 
 		Server(const Server& rhs);
@@ -51,9 +55,21 @@ class Server
 		int		handleCap(ClientSession& client, Command& command);
 		int		handleNick(ClientSession& client, Command& command);
 		int		handleUser(ClientSession& client, Command& command);
+		int		handleJoin(ClientSession& client, Command& command);
+		int		handlePart(ClientSession& client, Command& command);
+		int		handlePrivmsg(ClientSession& client, Command& command);
+		int		handleInvite(ClientSession& client, Command& command);
+		int		handleKick(ClientSession& client, Command& command);
 		void	tryCompleteRegistration(ClientSession& client);
 		bool	isNicknameInUse(const std::string& nickname, int excludingFd) const;
 		bool	isValidNickname(const std::string& nickname) const;
+		bool	isValidChannelName(const std::string& channelName) const;
+		ClientSession*	findClientByNick(const std::string& nickname);
+		std::vector<std::string> splitByComma(const std::string& text) const;
+		void	sendToClient(int fd, const std::string& message);
+		void	broadcastToChannel(const Channel& channel, const std::string& message, int exceptFd);
+		std::string	buildNamesList(const Channel& channel) const;
+		void	removeClientFromAllChannels(int clientFd);
 		void	disconnectClient(int clientFd);
 		void	syncWriteInterest();
 		ClientSession*	findClientByFd(int clientFd);
